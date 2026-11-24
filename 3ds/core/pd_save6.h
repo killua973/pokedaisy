@@ -11,16 +11,16 @@
 #include "pd_pk6.h"
 
 #define PD_SAVE6_SIZE 0x65600
-#define PD_SAVE6_FOOTER 0xFEEB
+#define PD_SAVE6_FOOTER "FEEB" // the footer block's magic, near the end (0x65410 in X/Y's)
 #define PD_SAVE6_PARTY 6
 
 struct pd_save6_layout {
     uint32_t partyOff; // where the six stored PK6s sit; 0 = not mapped yet
 };
 
-// X / Y's: the container is known (0x65600 bytes, the FEEB footer); the party's
-// offset still has to be proven on a fixture (native-capture/n3ds_dump --save
-// main), so it stays 0 until then.
+// X / Y's: 0x65600 bytes with the FEEB footer; the party's six stored PK6s at
+// 0x22600 (proven on a real main, see pd_save6.c). Other builds / languages:
+// prove with pd_gen6_preview scan.
 extern const struct pd_save6_layout pd_save6_xy;
 
 struct pd_save6 {

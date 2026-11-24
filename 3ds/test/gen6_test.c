@@ -103,8 +103,7 @@ int main(void) {
     // A synthetic main save: 0x65600 bytes, the FEEB footer, two PK6s at 0x1000.
     static uint8_t mainFile[PD_SAVE6_SIZE];
     memset(mainFile, 0, sizeof mainFile);
-    mainFile[PD_SAVE6_SIZE - 0x10] = 0xEB;
-    mainFile[PD_SAVE6_SIZE - 0x0F] = 0xFE;
+    memcpy(mainFile + PD_SAVE6_SIZE - 0x10, "FEEB", 4);
     struct pd_pk6 p1 = sample(0x01020304), p2 = sample(0x0A0B0C0D);
     p2.species = 661; // Fletchling
     strcpy(p2.nickname, "FLETCH");
@@ -120,9 +119,13 @@ int main(void) {
     CHECK(pd_save6_parse(&s, mainFile, PD_SAVE6_SIZE - 1, &testLayout) != NULL, "short save accepted");
     mainFile[PD_SAVE6_SIZE - 0x10] = 0;
     CHECK(pd_save6_parse(&s, mainFile, sizeof mainFile, &testLayout) != NULL, "save without footer accepted");
-    mainFile[PD_SAVE6_SIZE - 0x10] = 0xEB;
+    memcpy(mainFile + PD_SAVE6_SIZE - 0x10, "FEEB", 4);
     CHECK(pd_save6_parse(&s, mainFile, sizeof mainFile, &pd_save6_xy) == NULL, "xy layout parse failed");
-    CHECK(pd_save6_xy.partyOff == 0 && !pd_save6_party_mon(&s, 0, &m), "xy layout party read before its offset is proven");
+    // X / Y's proven party offset (pd_save6.c); this synthetic file's party is at 0x1000, not there.
+    CHECK(pd_save6_xy.partyOff == 0x22600 && !pd_save6_party_mon(&s, 0, &m), "xy layout read at an unproven offset");
+    const struct pd_save6_layout none = { .partyOff = 0 };
+    CHECK(pd_save6_parse(&s, mainFile, sizeof mainFile, &none) == NULL && !pd_save6_party_mon(&s, 0, &m),
+          "unmapped layout read");
 
     if (failures) {
         printf("%d FAILURES\n", failures);

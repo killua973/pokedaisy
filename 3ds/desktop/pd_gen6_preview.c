@@ -123,6 +123,53 @@ static int dump_mode(const char* dir) {
     return 0;
 }
 
+// Scans a main file for runs of consecutive checksum-valid PK6s (the party and
+// the PC boxes both qualify): prints the start of each run of >= 4 valid slots
+// holding at least one real species. The party is the first such run.
+static int scan_mode(const char* path) {
+    FILE* f = fopen(path, "rb");
+    if (!f) {
+        fprintf(stderr, "pd_gen6_preview: can't open %s\n", path);
+        return 1;
+    }
+    static uint8_t buf[PD_SAVE6_SIZE + 1];
+    size_t n = fread(buf, 1, sizeof buf, f);
+    fclose(f);
+    if (n != PD_SAVE6_SIZE) {
+        fprintf(stderr, "pd_gen6_preview: %s: 0x%zx bytes, not a Gen 6 main (0x65600)\n", path, n);
+        return 1;
+    }
+    // One pass of run flags, then print only each run's first offset (the party
+    // is the first run holding real species; the PC boxes follow as more runs).
+    static bool run[(PD_SAVE6_SIZE / 4) + 1];
+    static int speciesAt[(PD_SAVE6_SIZE / 4) + 1][PD_SAVE6_PARTY];
+    for (size_t off = 0; off + (size_t) PD_SAVE6_PARTY * PD_PK6_STORED <= n; off += 4) {
+        int valid = 0, real = 0;
+        for (int i = 0; i < PD_SAVE6_PARTY; i++) {
+            struct pd_pk6 m;
+            if (!pd_pk6_decode(buf + off + (size_t) i * PD_PK6_STORED, PD_PK6_STORED, &m)) break;
+            if (m.species > 721) break;
+            speciesAt[off / 4][i] = m.species;
+            valid++;
+            if (m.species) real++;
+        }
+        run[off / 4] = valid >= 4 && real >= 1;
+    }
+    int found = 0;
+    for (size_t off = 0; off + (size_t) PD_SAVE6_PARTY * PD_PK6_STORED <= n; off += 4) {
+        size_t k = off / 4;
+        bool prev = off >= PD_PK6_STORED && run[k - PD_PK6_STORED / 4];
+        if (run[k] && !prev) {
+            printf("run at 0x%zx: species", off);
+            for (int i = 0; i < PD_SAVE6_PARTY; i++) printf(" %d", speciesAt[k][i]);
+            printf("%s\n", found == 0 ? "  <- first run: the party" : "");
+            found++;
+        }
+    }
+    if (!found) printf("no party-like PK6 run found\n");
+    return 0;
+}
+
 static int save_mode(const char* path, const char* partyOff) {
     FILE* f = fopen(path, "rb");
     if (!f) {
@@ -155,6 +202,7 @@ static int save_mode(const char* path, const char* partyOff) {
 int main(int argc, char** argv) {
     if (argc >= 3 && strcmp(argv[1], "dump") == 0) return dump_mode(argv[2]);
     if (argc >= 3 && strcmp(argv[1], "save") == 0) return save_mode(argv[2], argc >= 4 ? argv[3] : NULL);
-    fprintf(stderr, "usage: %s dump <dir> | save <main> [partyOffHex]\n", argv[0]);
+    if (argc >= 3 && strcmp(argv[1], "scan") == 0) return scan_mode(argv[2]);
+    fprintf(stderr, "usage: %s dump <dir> | save <main> [partyOffHex] | scan <main>\n", argv[0]);
     return 2;
 }
