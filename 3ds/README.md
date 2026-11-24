@@ -418,6 +418,15 @@ puts the renderer on a thread of its own, as on a New 3DS), `bench` (times the c
 `test/sim_*.txt` on FireRed and Emerald (`ROM_DIR`, `SAVE_DIR`), `make sim-test-gb` the Game Boy script on Yellow; saves
 are copied first, never written.
 
+## Gen 6 (X / Y), read-only
+
+`core/pd_pk6.c` decodes the PK6 record (the C twin of the app's `Gen6Reader`), `core/pd_gen6.c` reads a Gen 6
+game's live memory through `pd_read_fn` (party, bag, zone, battle - the proven X USA addresses), `core/pd_save6.c`
+parses a save's `main` (0x65600 bytes, FEEB footer), and `core/pd_gen6_gen.c` (from `tools/gen_gen6.py`) holds the
+Gen 6 type chart with the Fairy type. On the desktop: `make test-gen6` (the codec and the chart on synthetic
+records), `make gen6-preview` then `build/pd_gen6_preview dump <dir>` on an `n3ds_dump` RAM dump, or
+`save <main> [partyOffHex]` on a save. The save's party offset is not mapped yet: prove it on a fixture first.
+
 ## Game data from the app
 
 ```sh

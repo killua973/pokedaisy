@@ -24,7 +24,7 @@ test-old3ds:
 	cmake --build $(BUILD)/old3ds-tests -j4
 	ctest --test-dir $(BUILD)/old3ds-tests --output-on-failure
 
-.PHONY: preview library-preview docs-shots test-scroll test-save 3ds-dev cia test-shiny test-roms test-gbguide test-gbdex test-dex test-font test-tr 3ds decomps fixture-roms azahar-test azahar-battle-test tables clean
+.PHONY: preview library-preview docs-shots test-scroll test-save 3ds-dev cia test-shiny test-roms test-gbguide test-gbdex test-dex test-font test-tr 3ds decomps fixture-roms azahar-test azahar-battle-test tables test-gen6 gen6-preview clean
 
 $(BUILD)/pd_font_test: core/pd_canvas.c core/pd_canvas.h core/pd_font.h core/pd_font_gen.c test/font_test.c
 	@mkdir -p $(BUILD)
@@ -138,6 +138,24 @@ test-save: $(BUILD)/pd_save_test
 	$(BUILD)/pd_save_test "BPRE=$(LIBRARY_SAVES)/Pokemon - FireRed Version (USA, Europe) (Rev 1).srm" \
 		"BPEE=$(LIBRARY_SAVES)/Pokemon - Emerald Version (USA, Europe).srm" "AXVE=$(LIBRARY_SAVES)/Pokemon - Ruby Version (USA, Europe) (Rev 1).sav"
 
+# Gen 6 (X / Y) read-only: the PK6 codec, the type chart and the save container on
+# synthetic records (real captures land with native-capture/n3ds_dump; none here).
+$(BUILD)/pd_gen6_test: $(CORE_SRC) $(wildcard core/*.h) test/gen6_test.c
+	@mkdir -p $(BUILD)
+	$(CC) $(CFLAGS) -o $@ $(CORE_SRC) test/gen6_test.c -lm
+
+test-gen6: $(BUILD)/pd_gen6_test
+	python3 tools/gen_gen6.py --check
+	$(BUILD)/pd_gen6_test
+
+# The Gen 6 companion on a desktop: a RAM dump (n3ds_dump's `dump <dir>`) or a
+# save's main file, printed. build/pd_gen6_preview dump <dir> | save <main> [partyOffHex]
+$(BUILD)/pd_gen6_preview: $(CORE_SRC) $(wildcard core/*.h) desktop/pd_gen6_preview.c
+	@mkdir -p $(BUILD)
+	$(CC) $(CFLAGS) -o $@ $(CORE_SRC) desktop/pd_gen6_preview.c -lm
+
+gen6-preview: $(BUILD)/pd_gen6_preview
+
 # The tabs that read the ROM (MAP, POKéDEX, GUIDE) need one: pret's decomps
 # build byte-identical to retail (make decomps, below); without them those
 # tabs show their "not available" notices. Point FR_ROM / EM_ROM at builds you
@@ -196,6 +214,7 @@ tables:
 	python3 tools/gen_icon.py
 	python3 tools/gen_icons.py
 	python3 tools/gen_save_tables.py
+	python3 tools/gen_gen6.py
 
 # The repo is mounted whole: the build needs third_party/mgba next to 3ds/.
 3ds:
