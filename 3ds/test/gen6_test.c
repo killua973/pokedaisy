@@ -100,30 +100,38 @@ int main(void) {
     CHECK(pd_gen6_effectiveness(PD_TYPE_FIRE, PD_TYPE_ROCK) == 1, "fire vs rock");
     CHECK(pd_gen6_effectiveness(PD_TYPE_NORMAL, PD_TYPE_NORMAL) == 2, "normal vs normal");
 
-    // A synthetic main save: 0x65600 bytes, the FEEB footer, two PK6s at 0x1000.
+    // A synthetic main save: 0x65600 bytes, the FEEB footer, two party records
+    // (stride 0x104, PK6 + party stats, like X/Y's at 0x14200) at 0x1000.
     static uint8_t mainFile[PD_SAVE6_SIZE];
     memset(mainFile, 0, sizeof mainFile);
     memcpy(mainFile + PD_SAVE6_SIZE - 0x10, "FEEB", 4);
     struct pd_pk6 p1 = sample(0x01020304), p2 = sample(0x0A0B0C0D);
     p2.species = 661; // Fletchling
     strcpy(p2.nickname, "FLETCH");
-    pd_pk6_encode(&p1, PD_PK6_STORED, mainFile + 0x1000);
-    pd_pk6_encode(&p2, PD_PK6_STORED, mainFile + 0x1000 + PD_PK6_STORED);
-    const struct pd_save6_layout testLayout = { .partyOff = 0x1000 };
+    pd_pk6_encode(&p1, PD_PK6_PARTY, mainFile + 0x1000);
+    pd_pk6_encode(&p2, PD_PK6_PARTY, mainFile + 0x1000 + PD_PK6_PARTY);
+    const struct pd_save6_layout testLayout = { .partyOff = 0x1000, .partyStride = PD_PK6_PARTY };
     struct pd_save6 s;
     CHECK(pd_save6_parse(&s, mainFile, sizeof mainFile, &testLayout) == NULL, "save6 parse failed");
     struct pd_pk6 m;
-    CHECK(pd_save6_party_mon(&s, 0, &m) && m.species == 658 && strcmp(m.nickname, "CHESPIN") == 0, "save6 party 0");
+    CHECK(pd_save6_party_mon(&s, 0, &m) && m.species == 658 && strcmp(m.nickname, "CHESPIN") == 0 && m.level == 100 && m.hp == 219,
+          "save6 party 0: species %d level %d", m.species, m.level);
     CHECK(pd_save6_party_mon(&s, 1, &m) && m.species == 661, "save6 party 1 species %d", m.species);
     CHECK(!pd_save6_party_mon(&s, 2, &m), "save6 party 2 (empty) decoded");
+    // A stored-PK6 layout (stride 0xE8) reads the same records without the stats.
+    const struct pd_save6_layout stored = { .partyOff = 0x1000, .partyStride = PD_PK6_STORED };
+    CHECK(pd_save6_parse(&s, mainFile, sizeof mainFile, &stored) == NULL && pd_save6_party_mon(&s, 0, &m) &&
+          m.species == 658 && m.level == 0, "stored-stride read");
     CHECK(pd_save6_parse(&s, mainFile, PD_SAVE6_SIZE - 1, &testLayout) != NULL, "short save accepted");
     mainFile[PD_SAVE6_SIZE - 0x10] = 0;
     CHECK(pd_save6_parse(&s, mainFile, sizeof mainFile, &testLayout) != NULL, "save without footer accepted");
     memcpy(mainFile + PD_SAVE6_SIZE - 0x10, "FEEB", 4);
     CHECK(pd_save6_parse(&s, mainFile, sizeof mainFile, &pd_save6_xy) == NULL, "xy layout parse failed");
-    // X / Y's proven party offset (pd_save6.c); this synthetic file's party is at 0x1000, not there.
-    CHECK(pd_save6_xy.partyOff == 0x22600 && !pd_save6_party_mon(&s, 0, &m), "xy layout read at an unproven offset");
-    const struct pd_save6_layout none = { .partyOff = 0 };
+    // X / Y's proven layout (pd_save6.c): party at 0x14200, stride 0x104; this synthetic
+    // file's records are at 0x1000, so reading at the xy offset must fail cleanly.
+    CHECK(pd_save6_xy.partyOff == 0x14200 && pd_save6_xy.partyStride == 0x104 && !pd_save6_party_mon(&s, 0, &m),
+          "xy layout read at an unproven offset");
+    const struct pd_save6_layout none = { .partyOff = 0, .partyStride = 0 };
     CHECK(pd_save6_parse(&s, mainFile, sizeof mainFile, &none) == NULL && !pd_save6_party_mon(&s, 0, &m),
           "unmapped layout read");
 

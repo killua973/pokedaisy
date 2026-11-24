@@ -15,11 +15,14 @@
 #define PD_SAVE6_PARTY 6
 
 struct pd_save6_layout {
-    uint32_t partyOff; // where the six stored PK6s sit; 0 = not mapped yet
+    uint32_t partyOff;    // where the six party records sit; 0 = not mapped yet
+    uint32_t partyStride; // 0x104: each record is a PK6 + its 0x1C party stats (level/HP
+                          // available, like a live RAM slot); 0xE8: plain stored PK6s
 };
 
-// X / Y's: 0x65600 bytes with the FEEB footer; the party's six stored PK6s at
-// 0x22600 (proven on a real main, see pd_save6.c). Other builds / languages:
+// X / Y's: 0x65600 bytes with the FEEB footer; the party's six records at 0x14200,
+// stride 0x104 (cross-proved against a live RAM dump: identical species/level/HP;
+// the PC box storage starts at 0x22600, stride 0xE8). Other builds / languages:
 // prove with pd_gen6_preview scan.
 extern const struct pd_save6_layout pd_save6_xy;
 
@@ -31,8 +34,9 @@ struct pd_save6 {
 
 // NULL on success, else why not (in words for the player).
 const char* pd_save6_parse(struct pd_save6* s, const uint8_t* bytes, size_t len, const struct pd_save6_layout* f);
-// The i-th party Pokemon as a stored PK6 (level 0: a stored record carries no
-// party stats). false when the offset isn't mapped or the slot is empty.
+// The i-th party Pokemon. With stride 0x104 the record carries the party stats
+// (level, HP, stats filled); with 0xE8 it's a plain stored PK6 (level 0).
+// false when the offset isn't mapped or the slot is empty.
 bool pd_save6_party_mon(const struct pd_save6* s, int i, struct pd_pk6* out);
 
 #endif

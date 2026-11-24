@@ -123,9 +123,9 @@ static int dump_mode(const char* dir) {
     return 0;
 }
 
-// Scans a main file for runs of consecutive checksum-valid PK6s (the party and
-// the PC boxes both qualify): prints the start of each run of >= 4 valid slots
-// holding at least one real species. The party is the first such run.
+// Scans a main file for runs of consecutive checksum-valid PK6 records, at both
+// strides a Gen 6 save uses: 0x104 (party records, PK6 + party stats) and 0xE8
+// (plain stored PK6s, the PC boxes). Prints each run's first offset and species.
 static int scan_mode(const char* path) {
     FILE* f = fopen(path, "rb");
     if (!f) {
@@ -139,34 +139,38 @@ static int scan_mode(const char* path) {
         fprintf(stderr, "pd_gen6_preview: %s: 0x%zx bytes, not a Gen 6 main (0x65600)\n", path, n);
         return 1;
     }
-    // One pass of run flags, then print only each run's first offset (the party
-    // is the first run holding real species; the PC boxes follow as more runs).
-    static bool run[(PD_SAVE6_SIZE / 4) + 1];
-    static int speciesAt[(PD_SAVE6_SIZE / 4) + 1][PD_SAVE6_PARTY];
-    for (size_t off = 0; off + (size_t) PD_SAVE6_PARTY * PD_PK6_STORED <= n; off += 4) {
-        int valid = 0, real = 0;
-        for (int i = 0; i < PD_SAVE6_PARTY; i++) {
-            struct pd_pk6 m;
-            if (!pd_pk6_decode(buf + off + (size_t) i * PD_PK6_STORED, PD_PK6_STORED, &m)) break;
-            if (m.species > 721) break;
-            speciesAt[off / 4][i] = m.species;
-            valid++;
-            if (m.species) real++;
+    static const uint32_t strides[2] = { PD_PK6_PARTY, PD_PK6_STORED };
+    static const char* names[2] = { "party (stride 0x104)", "stored PK6s (stride 0xE8)" };
+    for (int s = 0; s < 2; s++) {
+        uint32_t stride = strides[s];
+        static bool run[(PD_SAVE6_SIZE / 4) + 1];
+        static int speciesAt[(PD_SAVE6_SIZE / 4) + 1][PD_SAVE6_PARTY];
+        memset(run, 0, sizeof run);
+        for (size_t off = 0; off + (size_t) PD_SAVE6_PARTY * stride <= n; off += 4) {
+            int valid = 0, real = 0;
+            for (int i = 0; i < PD_SAVE6_PARTY; i++) {
+                struct pd_pk6 m;
+                if (!pd_pk6_decode(buf + off + (size_t) i * stride, stride, &m)) break;
+                if (m.species > 721) break;
+                speciesAt[off / 4][i] = m.species;
+                valid++;
+                if (m.species) real++;
+            }
+            run[off / 4] = valid >= 4 && real >= 1;
         }
-        run[off / 4] = valid >= 4 && real >= 1;
-    }
-    int found = 0;
-    for (size_t off = 0; off + (size_t) PD_SAVE6_PARTY * PD_PK6_STORED <= n; off += 4) {
-        size_t k = off / 4;
-        bool prev = off >= PD_PK6_STORED && run[k - PD_PK6_STORED / 4];
-        if (run[k] && !prev) {
-            printf("run at 0x%zx: species", off);
-            for (int i = 0; i < PD_SAVE6_PARTY; i++) printf(" %d", speciesAt[k][i]);
-            printf("%s\n", found == 0 ? "  <- first run: the party" : "");
-            found++;
+        int found = 0;
+        for (size_t off = 0; off + (size_t) PD_SAVE6_PARTY * stride <= n; off += 4) {
+            size_t k = off / 4;
+            bool prev = off >= stride && run[k - stride / 4];
+            if (run[k] && !prev) {
+                printf("%s at 0x%zx: species", names[s], off);
+                for (int i = 0; i < PD_SAVE6_PARTY; i++) printf(" %d", speciesAt[k][i]);
+                printf("\n");
+                found++;
+            }
         }
+        if (!found) printf("%s: none\n", names[s]);
     }
-    if (!found) printf("no party-like PK6 run found\n");
     return 0;
 }
 
