@@ -150,9 +150,9 @@ test-gen6: $(BUILD)/pd_gen6_test
 
 # The Gen 6 companion on a desktop: a RAM dump (n3ds_dump's `dump <dir>`) or a
 # save's main file, printed. build/pd_gen6_preview dump <dir> | save <main> [partyOffHex]
-$(BUILD)/pd_gen6_preview: $(CORE_SRC) $(wildcard core/*.h) desktop/pd_gen6_preview.c
+$(BUILD)/pd_gen6_preview: $(CORE_SRC) $(wildcard core/*.h) desktop/pd_gen6_preview.c desktop/pd_png.c desktop/pd_png.h
 	@mkdir -p $(BUILD)
-	$(CC) $(CFLAGS) -o $@ $(CORE_SRC) desktop/pd_gen6_preview.c -lm
+	$(CC) $(CFLAGS) -o $@ $(CORE_SRC) desktop/pd_gen6_preview.c desktop/pd_png.c -lm
 
 gen6-preview: $(BUILD)/pd_gen6_preview
 

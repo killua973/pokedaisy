@@ -425,9 +425,10 @@ game's live memory through `pd_read_fn` (party, bag, zone, battle - the proven X
 parses a save's `main` (0x65600 bytes, FEEB footer; the party's six records at 0x14200, stride 0x104, cross-proved
 against a live RAM dump of the same save; the PC boxes start at 0x22600, stride 0xE8),
 and `core/pd_gen6_gen.c` (from `tools/gen_gen6.py`) holds the
-Gen 6 type chart with the Fairy type. On the desktop: `make test-gen6` (the codec and the chart on synthetic
+Gen 6 type chart with the Fairy type. `core/pd_ui_gen6.c` draws the read-only PARTY screen (slots + IVs/EVs/
+stats/moves) from a snapshot. On the desktop: `make test-gen6` (the codec and the chart on synthetic
 records), `make gen6-preview` then `build/pd_gen6_preview dump <dir>` on an `n3ds_dump` RAM dump,
-`save <main> [partyOffHex]` or `scan <main>` on a save.
+`save <main> [partyOffHex]` / `scan <main>` / `render <dir> <out.png> [slot]` on a save or a dump.
 
 ## Game data from the app
 

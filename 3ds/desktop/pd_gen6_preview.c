@@ -14,6 +14,8 @@
 
 #include "../core/pd_gen6.h"
 #include "../core/pd_save6.h"
+#include "../core/pd_ui_gen6.h"
+#include "pd_png.h"
 
 #define MAX_REGIONS 64
 
@@ -203,10 +205,35 @@ static int save_mode(const char* path, const char* partyOff) {
     return 0;
 }
 
+// Renders the read-only PARTY screen of a RAM dump to a PNG (400x240, the 3DS top screen).
+static int render_mode(const char* dir, const char* outPng, int selected) {
+    int n = load_dump(dir);
+    if (n <= 0) {
+        fprintf(stderr, "pd_gen6_preview: no <base-hex>.bin regions in %s\n", dir);
+        return 1;
+    }
+    struct pd_gen6_snapshot s;
+    pd_gen6_snapshot_read(&s, &pd_gen6_xy_usa, read_dump, NULL);
+    static uint32_t px[PD_UI_GEN6_W * PD_UI_GEN6_H];
+    struct pd_canvas c;
+    pd_canvas_init(&c, PD_UI_GEN6_W, PD_UI_GEN6_H, px);
+    pd_ui_gen6_party(&c, &s, selected);
+    static uint32_t rgb[PD_UI_GEN6_W * PD_UI_GEN6_H];
+    for (int i = 0; i < PD_UI_GEN6_W * PD_UI_GEN6_H; i++) rgb[i] = px[i] & 0xFFFFFF;
+    if (!pd_png_write(outPng, PD_UI_GEN6_W, PD_UI_GEN6_H, rgb)) {
+        fprintf(stderr, "pd_gen6_preview: can't write %s\n", outPng);
+        return 1;
+    }
+    printf("wrote %s (party %d)\n", outPng, s.partyCount);
+    return 0;
+}
+
 int main(int argc, char** argv) {
     if (argc >= 3 && strcmp(argv[1], "dump") == 0) return dump_mode(argv[2]);
     if (argc >= 3 && strcmp(argv[1], "save") == 0) return save_mode(argv[2], argc >= 4 ? argv[3] : NULL);
     if (argc >= 3 && strcmp(argv[1], "scan") == 0) return scan_mode(argv[2]);
-    fprintf(stderr, "usage: %s dump <dir> | save <main> [partyOffHex] | scan <main>\n", argv[0]);
+    if (argc >= 4 && strcmp(argv[1], "render") == 0) return render_mode(argv[2], argv[3], argc >= 5 ? atoi(argv[4]) : 0);
+    fprintf(stderr, "usage: %s dump <dir> | save <main> [partyOffHex] | scan <main> | render <dir> <out.png> [selected]\n",
+            argv[0]);
     return 2;
 }

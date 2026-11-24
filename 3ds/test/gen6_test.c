@@ -13,6 +13,8 @@
 #include "../core/pd_pk6.h"
 #include "../core/pd_gen6.h"
 #include "../core/pd_save6.h"
+#include "../core/pd_canvas.h"
+#include "../core/pd_ui_gen6.h"
 
 static int failures;
 #define CHECK(c, ...) do { if (!(c)) { failures++; printf("FAIL %s:%d: ", __FILE__, __LINE__); printf(__VA_ARGS__); printf("\n"); } } while (0)
@@ -134,6 +136,28 @@ int main(void) {
     const struct pd_save6_layout none = { .partyOff = 0, .partyStride = 0 };
     CHECK(pd_save6_parse(&s, mainFile, sizeof mainFile, &none) == NULL && !pd_save6_party_mon(&s, 0, &m),
           "unmapped layout read");
+
+    // The read-only PARTY screen renders: a filled canvas, and the details pane
+    // changes with the selected slot.
+    struct pd_gen6_snapshot snap;
+    memset(&snap, 0, sizeof snap);
+    snap.partyCount = 2;
+    snap.party[0] = sample(0x01020304);
+    snap.party[1] = sample(0x0A0B0C0D);
+    snap.party[1].species = 661;
+    snap.language = 2;
+    snap.zone = 190;
+    static uint32_t px[PD_UI_GEN6_W * PD_UI_GEN6_H], px2[PD_UI_GEN6_W * PD_UI_GEN6_H];
+    struct pd_canvas c;
+    pd_canvas_init(&c, PD_UI_GEN6_W, PD_UI_GEN6_H, px);
+    pd_ui_gen6_party(&c, &snap, 0);
+    int drawn = 0;
+    for (int i = 0; i < PD_UI_GEN6_W * PD_UI_GEN6_H; i++)
+        if (px[i] != 0xFF182038) drawn++;
+    CHECK(drawn > 1000, "party screen drew %d px", drawn);
+    pd_canvas_init(&c, PD_UI_GEN6_W, PD_UI_GEN6_H, px2);
+    pd_ui_gen6_party(&c, &snap, 1);
+    CHECK(memcmp(px, px2, sizeof px) != 0, "selected slot does not change the render");
 
     if (failures) {
         printf("%d FAILURES\n", failures);
